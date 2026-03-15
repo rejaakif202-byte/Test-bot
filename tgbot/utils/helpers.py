@@ -1,5 +1,6 @@
 from pyrogram import Client
 from pyrogram.types import Message, ChatPermissions
+from pyrogram.enums import ChatMemberStatus
 from datetime import datetime, timedelta
 
 
@@ -27,14 +28,14 @@ UNMUTE_PERMISSIONS = ChatPermissions(
 async def is_admin(client: Client, chat_id: int, user_id: int) -> bool:
     try:
         member = await client.get_chat_member(chat_id, user_id)
-        return member.status in ("administrator", "creator")
+        return member.status in (ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER)
     except Exception:
         return False
 
 async def is_owner_of_chat(client: Client, chat_id: int, user_id: int) -> bool:
     try:
         member = await client.get_chat_member(chat_id, user_id)
-        return member.status == "creator"
+        return member.status == ChatMemberStatus.OWNER
     except Exception:
         return False
 
@@ -46,6 +47,8 @@ async def bot_has_right(client: Client, chat_id: int, right: str) -> bool:
     try:
         me = await client.get_me()
         member = await client.get_chat_member(chat_id, me.id)
+        if member.status == ChatMemberStatus.OWNER:
+            return True
         return getattr(member.privileges, right, False)
     except Exception:
         return False
@@ -53,7 +56,7 @@ async def bot_has_right(client: Client, chat_id: int, right: str) -> bool:
 async def admin_has_right(client: Client, chat_id: int, user_id: int, right: str) -> bool:
     try:
         member = await client.get_chat_member(chat_id, user_id)
-        if member.status == "creator":
+        if member.status == ChatMemberStatus.OWNER:
             return True
         return getattr(member.privileges, right, False)
     except Exception:
@@ -62,7 +65,11 @@ async def admin_has_right(client: Client, chat_id: int, user_id: int, right: str
 async def is_user_in_chat(client: Client, chat_id: int, user_id: int) -> bool:
     try:
         member = await client.get_chat_member(chat_id, user_id)
-        return member.status not in ("left", "kicked", "banned")
+        return member.status not in (
+            ChatMemberStatus.LEFT,
+            ChatMemberStatus.BANNED,
+            ChatMemberStatus.RESTRICTED
+        )
     except Exception:
         return False
 
