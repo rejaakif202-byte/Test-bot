@@ -157,7 +157,7 @@ async def gmutelist_cmd(client: Client, message: Message):
 
 # ── SUDO ──────────────────────────────────────────────────────────────────────
 
-@Client.on_message(filters.command("addsudo"))
+@Client.on_message(filters.command("addsudo") & (filters.group | filters.private))
 async def addsudo_cmd(client: Client, message: Message):
     if not Config.is_owner(message.from_user.id):
         return await message.reply("**❌ This command is for the bot owner only.**")
@@ -169,7 +169,7 @@ async def addsudo_cmd(client: Client, message: Message):
                         disable_web_page_preview=True)
 
 
-@Client.on_message(filters.command("remsudo"))
+@Client.on_message(filters.command("remsudo") & (filters.group | filters.private))
 async def remsudo_cmd(client: Client, message: Message):
     if not Config.is_owner(message.from_user.id):
         return await message.reply("**❌ This command is for the bot owner only.**")
@@ -181,7 +181,7 @@ async def remsudo_cmd(client: Client, message: Message):
                         disable_web_page_preview=True)
 
 
-@Client.on_message(filters.command("sudolist"))
+@Client.on_message(filters.command("sudolist")) & (filters.group | filters.private))
 async def sudolist_cmd(client: Client, message: Message):
     sudo_ids = await get_sudo_users()
     try:
