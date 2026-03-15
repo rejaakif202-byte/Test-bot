@@ -93,12 +93,15 @@ async def get_target_user(client: Client, message: Message):
 # ── TIME PARSING ──────────────────────────────────────────────────────────────
 
 async def extract_time(time_str: str):
-    """Parse time string like 30s, 2m, 1h, 7d into seconds. Max unit = days."""
+    """Parse time string like 30s, 2m, 1h, 7d into seconds. No minimum limit."""
     if not time_str:
         return None
-    unit = time_str[-1].lower()
+    time_str = time_str.strip().lower()
+    unit = time_str[-1]
     try:
         value = int(time_str[:-1])
+        if value <= 0:
+            return None
     except ValueError:
         return None
     multipliers = {"s": 1, "m": 60, "h": 3600, "d": 86400}
