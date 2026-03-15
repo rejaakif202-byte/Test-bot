@@ -1,19 +1,20 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from pyrogram.errors import UserNotParticipant
+from pyrogram.errors import ChatAdminRequired, UserAdminInvalid
 from datetime import datetime, timedelta
 import asyncio
 
 from utils.helpers import (is_admin, get_target_user, extract_time, extract_reason,
-                            MUTE_PERMISSIONS, UNMUTE_PERMISSIONS, get_user_link,
-                            check_bot_admin, bot_has_right, admin_has_right, is_user_in_chat,
-                            format_duration)
+                            MUTE_PERMISSIONS, UNMUTE_PERMISSIONS,
+                            check_bot_admin, bot_has_right, is_user_in_chat)
 from database.helpers import (add_warn, remove_warn, get_warns, reset_warns,
                                get_warn_limit, set_warn_limit)
 from config import Config
 
 
 async def _checks(client, message, target, need_ban_right=True):
+    if not message.from_user:
+        return "**❌ Could not identify sender.**"
     if not await is_admin(client, message.chat.id, message.from_user.id):
         return "**❌ You must be an admin to use this command.**"
     if not await check_bot_admin(client, message.chat.id):
@@ -21,6 +22,8 @@ async def _checks(client, message, target, need_ban_right=True):
     if need_ban_right and not await bot_has_right(client, message.chat.id, "can_restrict_members"):
         return "**❌ I don't have permission to restrict members.**"
     if target:
+        if target.id == Config.OWNER_ID:
+            return "**❌ I can't act on the bot owner.**"
         if await is_admin(client, message.chat.id, target.id):
             return "**❌ I can't act on an admin.**"
         if not await is_user_in_chat(client, message.chat.id, target.id):
@@ -32,46 +35,71 @@ async def _checks(client, message, target, need_ban_right=True):
 
 @Client.on_message(filters.command("ban") & filters.group)
 async def ban_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please reply to a user or provide a username/ID.**")
     err = await _checks(client, message, target)
-    if err: return await message.reply(err)
+    if err:
+        return await message.reply(err)
     reason = extract_reason(message)
-    await client.ban_chat_member(message.chat.id, target.id)
-    await message.reply(f"**🚫 [{target.first_name}](tg://user?id={target.id}) is now banned from the chat.\nReason: {reason}**",
-                        disable_web_page_preview=True)
+    try:
+        await client.ban_chat_member(message.chat.id, target.id)
+        await message.reply(
+            f"**🚫 [{target.first_name}](tg://user?id={target.id}) is now banned from the chat.\nReason: {reason}**",
+            disable_web_page_preview=True)
+    except Exception as e:
+        await message.reply(f"**❌ Failed: {str(e)}**")
+
 
 @Client.on_message(filters.command("unban") & filters.group)
 async def unban_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please reply to a user or provide a username/ID.**")
     if not await is_admin(client, message.chat.id, message.from_user.id):
         return await message.reply("**❌ You must be an admin.**")
-    await client.unban_chat_member(message.chat.id, target.id)
-    await message.reply(f"**✅ [{target.first_name}](tg://user?id={target.id}) is now unbanned from the chat.**",
-                        disable_web_page_preview=True)
+    try:
+        await client.unban_chat_member(message.chat.id, target.id)
+        await message.reply(
+            f"**✅ [{target.first_name}](tg://user?id={target.id}) is now unbanned from the chat.**",
+            disable_web_page_preview=True)
+    except Exception as e:
+        await message.reply(f"**❌ Failed: {str(e)}**")
+
 
 @Client.on_message(filters.command("sban") & filters.group)
 async def sban_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please reply to a user or provide a username/ID.**")
     err = await _checks(client, message, target)
-    if err: return await message.reply(err)
-    await message.delete()
-    if message.reply_to_message:
-        await message.reply_to_message.delete()
-    await client.ban_chat_member(message.chat.id, target.id)
+    if err:
+        return await message.reply(err)
+    try:
+        await message.delete()
+        if message.reply_to_message:
+            await message.reply_to_message.delete()
+        await client.ban_chat_member(message.chat.id, target.id)
+    except Exception:
+        pass
+
 
 @Client.on_message(filters.command("tban") & filters.group)
 async def tban_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please reply to a user or provide a username/ID.**")
     err = await _checks(client, message, target)
-    if err: return await message.reply(err)
+    if err:
+        return await message.reply(err)
     time_str = message.command[2] if len(message.command) > 2 else None
     if not time_str:
         return await message.reply("**❌ Please provide a time. Example: /tban @user 1h**")
@@ -79,69 +107,106 @@ async def tban_cmd(client: Client, message: Message):
     if not seconds:
         return await message.reply("**❌ Invalid time format. Use: 30s, 1m, 2h, 7d**")
     until = datetime.utcnow() + timedelta(seconds=seconds)
-    await client.ban_chat_member(message.chat.id, target.id, until_date=until)
-    await message.reply(f"**⏳ [{target.first_name}](tg://user?id={target.id}) has been temporarily banned for {time_str}.\nThey will be unbanned automatically.**",
-                        disable_web_page_preview=True)
+    try:
+        await client.ban_chat_member(message.chat.id, target.id, until_date=until)
+        await message.reply(
+            f"**⏳ [{target.first_name}](tg://user?id={target.id}) has been temporarily banned for {time_str}.\nThey will be unbanned automatically.**",
+            disable_web_page_preview=True)
+    except Exception as e:
+        await message.reply(f"**❌ Failed: {str(e)}**")
+
 
 @Client.on_message(filters.command("dban") & filters.group)
 async def dban_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please reply to a user or provide a username/ID.**")
     err = await _checks(client, message, target)
-    if err: return await message.reply(err)
-    if message.reply_to_message:
-        await message.reply_to_message.delete()
-    await message.delete()
-    await client.ban_chat_member(message.chat.id, target.id)
-    sent = await client.send_message(message.chat.id,
-        f"**🗑️🚫 Message deleted and [{target.first_name}](tg://user?id={target.id}) has been banned.**",
-        disable_web_page_preview=True)
+    if err:
+        return await message.reply(err)
+    try:
+        if message.reply_to_message:
+            await message.reply_to_message.delete()
+        await message.delete()
+        await client.ban_chat_member(message.chat.id, target.id)
+        await client.send_message(
+            message.chat.id,
+            f"**🗑️🚫 Message deleted and [{target.first_name}](tg://user?id={target.id}) has been banned.**",
+            disable_web_page_preview=True)
+    except Exception as e:
+        await client.send_message(message.chat.id, f"**❌ Failed: {str(e)}**")
 
 
 # ── MUTE ──────────────────────────────────────────────────────────────────────
 
 @Client.on_message(filters.command("mute") & filters.group)
 async def mute_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please reply to a user or provide a username/ID.**")
     err = await _checks(client, message, target)
-    if err: return await message.reply(err)
-    await client.restrict_chat_member(message.chat.id, target.id, MUTE_PERMISSIONS)
-    await message.reply(f"**🔇 [{target.first_name}](tg://user?id={target.id}) is now muted from the chat.**",
-                        disable_web_page_preview=True)
+    if err:
+        return await message.reply(err)
+    try:
+        await client.restrict_chat_member(message.chat.id, target.id, MUTE_PERMISSIONS)
+        await message.reply(
+            f"**🔇 [{target.first_name}](tg://user?id={target.id}) is now muted from the chat.**",
+            disable_web_page_preview=True)
+    except Exception as e:
+        await message.reply(f"**❌ Failed: {str(e)}**")
+
 
 @Client.on_message(filters.command("unmute") & filters.group)
 async def unmute_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please reply to a user or provide a username/ID.**")
     if not await is_admin(client, message.chat.id, message.from_user.id):
         return await message.reply("**❌ You must be an admin.**")
-    await client.restrict_chat_member(message.chat.id, target.id, UNMUTE_PERMISSIONS)
-    await message.reply(f"**🔊 [{target.first_name}](tg://user?id={target.id}) is now unmuted from the chat.**",
-                        disable_web_page_preview=True)
+    try:
+        await client.restrict_chat_member(message.chat.id, target.id, UNMUTE_PERMISSIONS)
+        await message.reply(
+            f"**🔊 [{target.first_name}](tg://user?id={target.id}) is now unmuted from the chat.**",
+            disable_web_page_preview=True)
+    except Exception as e:
+        await message.reply(f"**❌ Failed: {str(e)}**")
+
 
 @Client.on_message(filters.command("smute") & filters.group)
 async def smute_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please reply to a user or provide a username/ID.**")
     err = await _checks(client, message, target)
-    if err: return await message.reply(err)
-    await message.delete()
-    if message.reply_to_message:
-        await message.reply_to_message.delete()
-    await client.restrict_chat_member(message.chat.id, target.id, MUTE_PERMISSIONS)
+    if err:
+        return await message.reply(err)
+    try:
+        await message.delete()
+        if message.reply_to_message:
+            await message.reply_to_message.delete()
+        await client.restrict_chat_member(message.chat.id, target.id, MUTE_PERMISSIONS)
+    except Exception:
+        pass
+
 
 @Client.on_message(filters.command("tmute") & filters.group)
 async def tmute_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please reply to a user or provide a username/ID.**")
     err = await _checks(client, message, target)
-    if err: return await message.reply(err)
+    if err:
+        return await message.reply(err)
     time_str = message.command[2] if len(message.command) > 2 else None
     if not time_str:
         return await message.reply("**❌ Please provide a time. Example: /tmute @user 1h**")
@@ -149,55 +214,80 @@ async def tmute_cmd(client: Client, message: Message):
     if not seconds:
         return await message.reply("**❌ Invalid time format. Use: 30s, 1m, 2h, 7d**")
     until = datetime.utcnow() + timedelta(seconds=seconds)
-    await client.restrict_chat_member(message.chat.id, target.id, MUTE_PERMISSIONS, until_date=until)
-    await message.reply(f"**⏳ [{target.first_name}](tg://user?id={target.id}) has been temporarily muted for {time_str}.\nThey will be unmuted automatically.**",
-                        disable_web_page_preview=True)
+    try:
+        await client.restrict_chat_member(message.chat.id, target.id, MUTE_PERMISSIONS, until_date=until)
+        await message.reply(
+            f"**⏳ [{target.first_name}](tg://user?id={target.id}) has been temporarily muted for {time_str}.\nThey will be unmuted automatically.**",
+            disable_web_page_preview=True)
+    except Exception as e:
+        await message.reply(f"**❌ Failed: {str(e)}**")
+
 
 @Client.on_message(filters.command("dmute") & filters.group)
 async def dmute_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please reply to a user or provide a username/ID.**")
     err = await _checks(client, message, target)
-    if err: return await message.reply(err)
-    if message.reply_to_message:
-        await message.reply_to_message.delete()
-    await message.delete()
-    await client.restrict_chat_member(message.chat.id, target.id, MUTE_PERMISSIONS)
-    await client.send_message(message.chat.id,
-        f"**🗑️🔇 Message deleted and [{target.first_name}](tg://user?id={target.id}) has been muted.**",
-        disable_web_page_preview=True)
+    if err:
+        return await message.reply(err)
+    try:
+        if message.reply_to_message:
+            await message.reply_to_message.delete()
+        await message.delete()
+        await client.restrict_chat_member(message.chat.id, target.id, MUTE_PERMISSIONS)
+        await client.send_message(
+            message.chat.id,
+            f"**🗑️🔇 Message deleted and [{target.first_name}](tg://user?id={target.id}) has been muted.**",
+            disable_web_page_preview=True)
+    except Exception as e:
+        await client.send_message(message.chat.id, f"**❌ Failed: {str(e)}**")
 
 
 # ── KICK ──────────────────────────────────────────────────────────────────────
 
 @Client.on_message(filters.command("kick") & filters.group)
 async def kick_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please reply to a user or provide a username/ID.**")
     err = await _checks(client, message, target)
-    if err: return await message.reply(err)
-    await client.ban_chat_member(message.chat.id, target.id)
-    await client.unban_chat_member(message.chat.id, target.id)
-    await message.reply(f"**👢 [{target.first_name}](tg://user?id={target.id}) has been kicked from the chat.**",
-                        disable_web_page_preview=True)
+    if err:
+        return await message.reply(err)
+    try:
+        await client.ban_chat_member(message.chat.id, target.id)
+        await client.unban_chat_member(message.chat.id, target.id)
+        await message.reply(
+            f"**👢 [{target.first_name}](tg://user?id={target.id}) has been kicked from the chat.**",
+            disable_web_page_preview=True)
+    except Exception as e:
+        await message.reply(f"**❌ Failed: {str(e)}**")
 
 
 # ── WARN ──────────────────────────────────────────────────────────────────────
 
 @Client.on_message(filters.command("warn") & filters.group)
 async def warn_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please reply to a user or provide a username/ID.**")
     err = await _checks(client, message, target, need_ban_right=False)
-    if err: return await message.reply(err)
+    if err:
+        return await message.reply(err)
     reason = extract_reason(message)
     limit = await get_warn_limit(message.chat.id)
     count = await add_warn(message.chat.id, target.id, reason)
     if count > limit:
-        await client.ban_chat_member(message.chat.id, target.id)
+        try:
+            await client.ban_chat_member(message.chat.id, target.id)
+        except Exception:
+            pass
         await reset_warns(message.chat.id, target.id)
         return await message.reply(
             f"**🚫 [{target.first_name}](tg://user?id={target.id}) has reached the maximum warnings and has been banned.**",
@@ -206,8 +296,11 @@ async def warn_cmd(client: Client, message: Message):
         f"**⚠️ [{target.first_name}](tg://user?id={target.id}) has been warned! ({count}/{limit})\nReason: {reason}**",
         disable_web_page_preview=True)
 
+
 @Client.on_message(filters.command("unwarn") & filters.group)
 async def unwarn_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please reply to a user or provide a username/ID.**")
@@ -219,30 +312,44 @@ async def unwarn_cmd(client: Client, message: Message):
         f"**✅ One warning removed from [{target.first_name}](tg://user?id={target.id}). ({count}/{limit})**",
         disable_web_page_preview=True)
 
+
 @Client.on_message(filters.command("swarn") & filters.group)
 async def swarn_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please reply to a user or provide a username/ID.**")
     err = await _checks(client, message, target, need_ban_right=False)
-    if err: return await message.reply(err)
+    if err:
+        return await message.reply(err)
     reason = extract_reason(message)
     limit = await get_warn_limit(message.chat.id)
-    await message.delete()
-    if message.reply_to_message:
-        await message.reply_to_message.delete()
+    try:
+        await message.delete()
+        if message.reply_to_message:
+            await message.reply_to_message.delete()
+    except Exception:
+        pass
     count = await add_warn(message.chat.id, target.id, reason)
     if count > limit:
-        await client.ban_chat_member(message.chat.id, target.id)
+        try:
+            await client.ban_chat_member(message.chat.id, target.id)
+        except Exception:
+            pass
         await reset_warns(message.chat.id, target.id)
+
 
 @Client.on_message(filters.command("twarn") & filters.group)
 async def twarn_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please reply to a user or provide a username/ID.**")
     err = await _checks(client, message, target, need_ban_right=False)
-    if err: return await message.reply(err)
+    if err:
+        return await message.reply(err)
     time_str = message.command[2] if len(message.command) > 2 else None
     if not time_str:
         return await message.reply("**❌ Please provide a time. Example: /twarn @user 1h**")
@@ -251,55 +358,74 @@ async def twarn_cmd(client: Client, message: Message):
         return await message.reply("**❌ Invalid time format. Use: 30s, 1m, 2h, 7d**")
     reason = extract_reason(message, offset=3)
     limit = await get_warn_limit(message.chat.id)
-    count = await add_warn(message.chat.id, target.id, reason, expires=datetime.utcnow() + timedelta(seconds=seconds))
+    count = await add_warn(message.chat.id, target.id, reason,
+                           expires=datetime.utcnow() + timedelta(seconds=seconds))
     await message.reply(
         f"**⏳ [{target.first_name}](tg://user?id={target.id}) has been temporarily warned for {time_str}. ({count}/{limit})**",
         disable_web_page_preview=True)
-    # Auto unwarn after timer
     await asyncio.sleep(seconds)
     await remove_warn(message.chat.id, target.id)
 
+
 @Client.on_message(filters.command("dwarn") & filters.group)
 async def dwarn_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please reply to a user or provide a username/ID.**")
     err = await _checks(client, message, target, need_ban_right=False)
-    if err: return await message.reply(err)
+    if err:
+        return await message.reply(err)
     reason = extract_reason(message)
     limit = await get_warn_limit(message.chat.id)
-    if message.reply_to_message:
-        await message.reply_to_message.delete()
-    await message.delete()
+    try:
+        if message.reply_to_message:
+            await message.reply_to_message.delete()
+        await message.delete()
+    except Exception:
+        pass
     count = await add_warn(message.chat.id, target.id, reason)
     if count > limit:
-        await client.ban_chat_member(message.chat.id, target.id)
+        try:
+            await client.ban_chat_member(message.chat.id, target.id)
+        except Exception:
+            pass
         await reset_warns(message.chat.id, target.id)
-        return await client.send_message(message.chat.id,
+        return await client.send_message(
+            message.chat.id,
             f"**🚫 [{target.first_name}](tg://user?id={target.id}) has reached the maximum warnings and has been banned.**",
             disable_web_page_preview=True)
-    await client.send_message(message.chat.id,
+    await client.send_message(
+        message.chat.id,
         f"**🗑️⚠️ Message deleted and [{target.first_name}](tg://user?id={target.id}) has been warned! ({count}/{limit})\nReason: {reason}**",
         disable_web_page_preview=True)
 
+
 @Client.on_message(filters.command("warns") & filters.group)
 async def warns_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     target = await get_target_user(client, message) or message.from_user
     count = await get_warns(message.chat.id, target.id)
     limit = await get_warn_limit(message.chat.id)
-    await message.reply(f"**⚠️ [{target.first_name}](tg://user?id={target.id}) has {count}/{limit} warnings.**",
-                        disable_web_page_preview=True)
+    await message.reply(
+        f"**⚠️ [{target.first_name}](tg://user?id={target.id}) has {count}/{limit} warnings.**",
+        disable_web_page_preview=True)
 
 
 # ── SETWARNLIMIT ──────────────────────────────────────────────────────────────
 
 @Client.on_message(filters.command("setwarnlimit") & filters.group)
 async def setwarnlimit_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     if not await is_admin(client, message.chat.id, message.from_user.id):
         return await message.reply("**❌ You must be an admin.**")
     limit = await get_warn_limit(message.chat.id)
-    buttons = _warn_limit_buttons(limit)
-    await message.reply(f"**⚙️ Your default warn limit is: {limit}**", reply_markup=buttons)
+    await message.reply(f"**⚙️ Your default warn limit is: {limit}**",
+                        reply_markup=_warn_limit_buttons(limit))
+
 
 def _warn_limit_buttons(limit: int):
     rows = []
@@ -309,6 +435,7 @@ def _warn_limit_buttons(limit: int):
         rows.append([InlineKeyboardButton("🔄 Back to Default", callback_data="warnlimit_reset")])
     rows.append([InlineKeyboardButton("❌ Close", callback_data="close")])
     return InlineKeyboardMarkup(rows)
+
 
 @Client.on_callback_query(filters.regex("^warnlimit_(increase|reset)$"))
 async def warnlimit_callback(client: Client, callback: CallbackQuery):
@@ -333,18 +460,25 @@ async def warnlimit_callback(client: Client, callback: CallbackQuery):
 
 @Client.on_message(filters.command("del") & filters.group)
 async def del_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     if not await is_admin(client, message.chat.id, message.from_user.id):
         return await message.reply("**❌ You must be an admin.**")
     if not message.reply_to_message:
         return await message.reply("**❌ Please reply to a message to delete it.**")
-    await message.reply_to_message.delete()
-    await message.delete()
+    try:
+        await message.reply_to_message.delete()
+        await message.delete()
+    except Exception as e:
+        await message.reply(f"**❌ Failed: {str(e)}**")
 
 
 # ── PURGE ─────────────────────────────────────────────────────────────────────
 
 @Client.on_message(filters.command("purge") & filters.group)
 async def purge_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     if not await is_admin(client, message.chat.id, message.from_user.id):
         return await message.reply("**❌ You must be an admin.**")
     if not await bot_has_right(client, message.chat.id, "can_delete_messages"):
@@ -356,13 +490,14 @@ async def purge_cmd(client: Client, message: Message):
     deleted = 0
     msg_ids = list(range(start_id, end_id + 1))
     for i in range(0, len(msg_ids), 100):
-        chunk = msg_ids[i:i+100]
+        chunk = msg_ids[i:i + 100]
         try:
             await client.delete_messages(message.chat.id, chunk)
             deleted += len(chunk)
         except Exception:
             pass
-    sent = await client.send_message(message.chat.id,
+    sent = await client.send_message(
+        message.chat.id,
         f"**🧹 Purge completed, {deleted} messages deleted in {message.chat.title}.**")
     await asyncio.sleep(5)
     await sent.delete()
