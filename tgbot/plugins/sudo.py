@@ -18,7 +18,7 @@ import datetime
 
 # ── GBAN ──────────────────────────────────────────────────────────────────────
 
-@Client.on_message(filters.command("gban"))
+@Client.on_message(filters.command("gban")) & (filters.group | filters.private))
 async def gban_cmd(client: Client, message: Message):
     if not await is_sudo_db(message.from_user.id):
         return await message.reply("**❌ This command is for sudo users only.**")
@@ -47,7 +47,7 @@ async def gban_cmd(client: Client, message: Message):
         disable_web_page_preview=True)
 
 
-@Client.on_message(filters.command("ungban"))
+@Client.on_message(filters.command("ungban")) & (filters.group | filters.private))
 async def ungban_cmd(client: Client, message: Message):
     if not await is_sudo_db(message.from_user.id):
         return await message.reply("**❌ This command is for sudo users only.**")
@@ -68,7 +68,7 @@ async def ungban_cmd(client: Client, message: Message):
                         disable_web_page_preview=True)
 
 
-@Client.on_message(filters.command("gbanlist"))
+@Client.on_message(filters.command("gbanlist")) & (filters.group | filters.private))
 async def gbanlist_cmd(client: Client, message: Message):
     if not await is_sudo_db(message.from_user.id):
         return await message.reply("**❌ This command is for sudo users only.**")
@@ -89,13 +89,16 @@ async def gbanlist_cmd(client: Client, message: Message):
 
 # ── GMUTE ─────────────────────────────────────────────────────────────────────
 
-@Client.on_message(filters.command("gmute"))
+@Client.on_message(filters.command("gmute")) & (filters.group | filters.private))
 async def gmute_cmd(client: Client, message: Message):
     if not await is_sudo_db(message.from_user.id):
         return await message.reply("**❌ This command is for sudo users only.**")
+        
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please provide a username or user ID.**")
+    if target.id == config.OWNER_ID
+        return await message.reply("** You Can't Mute My Master.**")
     if await is_gmuted(target.id):
         return await message.reply(f"**⚠️ [{target.first_name}](tg://user?id={target.id}) is already globally muted.**",
                                    disable_web_page_preview=True)
@@ -114,7 +117,7 @@ async def gmute_cmd(client: Client, message: Message):
         disable_web_page_preview=True)
 
 
-@Client.on_message(filters.command("ungmute"))
+@Client.on_message(filters.command("ungmute")) & (filters.group | filters.private))
 async def ungmute_cmd(client: Client, message: Message):
     if not await is_sudo_db(message.from_user.id):
         return await message.reply("**❌ This command is for sudo users only.**")
@@ -136,7 +139,7 @@ async def ungmute_cmd(client: Client, message: Message):
                         disable_web_page_preview=True)
 
 
-@Client.on_message(filters.command("gmutelist"))
+@Client.on_message(filters.command("gmutelist")) & (filters.group | filters.private))
 async def gmutelist_cmd(client: Client, message: Message):
     if not await is_sudo_db(message.from_user.id):
         return await message.reply("**❌ This command is for sudo users only.**")
@@ -208,7 +211,7 @@ async def sudolist_cmd(client: Client, message: Message):
 
 # ── BLOCK / UNBLOCK ───────────────────────────────────────────────────────────
 
-@Client.on_message(filters.command("block"))
+@Client.on_message(filters.command("block")) & (filters.group | filters.private))
 async def block_cmd(client: Client, message: Message):
     if not await is_sudo_db(message.from_user.id):
         return await message.reply("**❌ This command is for sudo users only.**")
@@ -220,7 +223,7 @@ async def block_cmd(client: Client, message: Message):
                         disable_web_page_preview=True)
 
 
-@Client.on_message(filters.command("unblock"))
+@Client.on_message(filters.command("unblock")) & (filters.group | filters.private))
 async def unblock_cmd(client: Client, message: Message):
     if not await is_sudo_db(message.from_user.id):
         return await message.reply("**❌ This command is for sudo users only.**")
@@ -234,7 +237,7 @@ async def unblock_cmd(client: Client, message: Message):
 
 # ── BROADCAST ─────────────────────────────────────────────────────────────────
 
-@Client.on_message(filters.command("broadcast"))
+@Client.on_message(filters.command("broadcast")) & (filters.group | filters.private))
 async def broadcast_cmd(client: Client, message: Message):
     if not Config.is_owner(message.from_user.id):
         return await message.reply("**❌ This command is for the bot owner only.**")
@@ -274,7 +277,7 @@ async def broadcast_cmd(client: Client, message: Message):
 
 # ── STATS ─────────────────────────────────────────────────────────────────────
 
-@Client.on_message(filters.command("stats"))
+@Client.on_message(filters.command("stats")) & (filters.group | filters.private))
 async def stats_cmd(client: Client, message: Message):
     if not await is_sudo_db(message.from_user.id):
         return await message.reply("**❌ This command is for sudo users only.**")
