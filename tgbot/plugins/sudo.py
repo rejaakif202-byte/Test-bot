@@ -2,24 +2,25 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 import asyncio
 import time
+import datetime
 
-from utils.helpers import get_target_user, MUTE_PERMISSIONS, format_duration
+from utils.helpers import get_target_user, MUTE_PERMISSIONS, UNMUTE_PERMISSIONS, format_duration
 from database.helpers import (
-    gban_user, ungban_user, is_gbanned, get_gban, get_gban_list,
+    gban_user, ungban_user, is_gbanned, get_gban_list,
     gmute_user, ungmute_user, is_gmuted, get_gmute_list,
     add_sudo, remove_sudo, get_sudo_users, is_sudo_db,
-    block_user, unblock_user, is_blocked,
+    block_user, unblock_user,
     get_all_groups, get_all_users, total_groups, total_users,
-    save_user
 )
 from config import Config
-import datetime
 
 
 # ── GBAN ──────────────────────────────────────────────────────────────────────
 
-@Client.on_message(filters.command("gban")) & (filters.group | filters.private))
+@Client.on_message(filters.command("gban") & (filters.group | filters.private))
 async def gban_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     if not await is_sudo_db(message.from_user.id):
         return await message.reply("**❌ This command is for sudo users only.**")
     target = await get_target_user(client, message)
@@ -28,11 +29,11 @@ async def gban_cmd(client: Client, message: Message):
     if target.id == Config.OWNER_ID:
         return await message.reply("**❌ You can't gban the owner.**")
     if await is_gbanned(target.id):
-        return await message.reply(f"**⚠️ [{target.first_name}](tg://user?id={target.id}) is already globally banned.**",
-                                   disable_web_page_preview=True)
+        return await message.reply(
+            f"**⚠️ [{target.first_name}](tg://user?id={target.id}) is already globally banned.**",
+            disable_web_page_preview=True)
     reason = " ".join(message.command[2:]) if len(message.command) > 2 else "No reason provided"
     await gban_user(target.id, reason)
-
     groups = await get_all_groups()
     banned = 0
     for grp in groups:
@@ -41,22 +42,24 @@ async def gban_cmd(client: Client, message: Message):
             banned += 1
         except Exception:
             pass
-
     await message.reply(
         f"**🌐🚫 [{target.first_name}](tg://user?id={target.id}) has been globally banned in {banned} groups.\nReason: {reason}**",
         disable_web_page_preview=True)
 
 
-@Client.on_message(filters.command("ungban")) & (filters.group | filters.private))
+@Client.on_message(filters.command("ungban") & (filters.group | filters.private))
 async def ungban_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     if not await is_sudo_db(message.from_user.id):
         return await message.reply("**❌ This command is for sudo users only.**")
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please provide a username or user ID.**")
     if not await is_gbanned(target.id):
-        return await message.reply(f"**⚠️ [{target.first_name}](tg://user?id={target.id}) is not globally banned.**",
-                                   disable_web_page_preview=True)
+        return await message.reply(
+            f"**⚠️ [{target.first_name}](tg://user?id={target.id}) is not globally banned.**",
+            disable_web_page_preview=True)
     await ungban_user(target.id)
     groups = await get_all_groups()
     for grp in groups:
@@ -64,12 +67,15 @@ async def ungban_cmd(client: Client, message: Message):
             await client.unban_chat_member(grp["_id"], target.id)
         except Exception:
             pass
-    await message.reply(f"**✅ [{target.first_name}](tg://user?id={target.id}) has been globally unbanned.**",
-                        disable_web_page_preview=True)
+    await message.reply(
+        f"**✅ [{target.first_name}](tg://user?id={target.id}) has been globally unbanned.**",
+        disable_web_page_preview=True)
 
 
-@Client.on_message(filters.command("gbanlist")) & (filters.group | filters.private))
+@Client.on_message(filters.command("gbanlist") & (filters.group | filters.private))
 async def gbanlist_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     if not await is_sudo_db(message.from_user.id):
         return await message.reply("**❌ This command is for sudo users only.**")
     docs = await get_gban_list()
@@ -89,19 +95,21 @@ async def gbanlist_cmd(client: Client, message: Message):
 
 # ── GMUTE ─────────────────────────────────────────────────────────────────────
 
-@Client.on_message(filters.command("gmute")) & (filters.group | filters.private))
+@Client.on_message(filters.command("gmute") & (filters.group | filters.private))
 async def gmute_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     if not await is_sudo_db(message.from_user.id):
         return await message.reply("**❌ This command is for sudo users only.**")
-        
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please provide a username or user ID.**")
-    if target.id == config.OWNER_ID
-        return await message.reply("** You Can't Mute My Master.**")
+    if target.id == Config.OWNER_ID:
+        return await message.reply("**❌ You can't gmute the owner.**")
     if await is_gmuted(target.id):
-        return await message.reply(f"**⚠️ [{target.first_name}](tg://user?id={target.id}) is already globally muted.**",
-                                   disable_web_page_preview=True)
+        return await message.reply(
+            f"**⚠️ [{target.first_name}](tg://user?id={target.id}) is already globally muted.**",
+            disable_web_page_preview=True)
     reason = " ".join(message.command[2:]) if len(message.command) > 2 else "No reason provided"
     await gmute_user(target.id, reason)
     groups = await get_all_groups()
@@ -117,30 +125,35 @@ async def gmute_cmd(client: Client, message: Message):
         disable_web_page_preview=True)
 
 
-@Client.on_message(filters.command("ungmute")) & (filters.group | filters.private))
+@Client.on_message(filters.command("ungmute") & (filters.group | filters.private))
 async def ungmute_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     if not await is_sudo_db(message.from_user.id):
         return await message.reply("**❌ This command is for sudo users only.**")
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please provide a username or user ID.**")
     if not await is_gmuted(target.id):
-        return await message.reply(f"**⚠️ [{target.first_name}](tg://user?id={target.id}) is not globally muted.**",
-                                   disable_web_page_preview=True)
+        return await message.reply(
+            f"**⚠️ [{target.first_name}](tg://user?id={target.id}) is not globally muted.**",
+            disable_web_page_preview=True)
     await ungmute_user(target.id)
-    from utils.helpers import UNMUTE_PERMISSIONS
     groups = await get_all_groups()
     for grp in groups:
         try:
             await client.restrict_chat_member(grp["_id"], target.id, UNMUTE_PERMISSIONS)
         except Exception:
             pass
-    await message.reply(f"**✅ [{target.first_name}](tg://user?id={target.id}) has been globally unmuted.**",
-                        disable_web_page_preview=True)
+    await message.reply(
+        f"**✅ [{target.first_name}](tg://user?id={target.id}) has been globally unmuted.**",
+        disable_web_page_preview=True)
 
 
-@Client.on_message(filters.command("gmutelist")) & (filters.group | filters.private))
+@Client.on_message(filters.command("gmutelist") & (filters.group | filters.private))
 async def gmutelist_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     if not await is_sudo_db(message.from_user.id):
         return await message.reply("**❌ This command is for sudo users only.**")
     docs = await get_gmute_list()
@@ -162,30 +175,38 @@ async def gmutelist_cmd(client: Client, message: Message):
 
 @Client.on_message(filters.command("addsudo") & (filters.group | filters.private))
 async def addsudo_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     if not Config.is_owner(message.from_user.id):
         return await message.reply("**❌ This command is for the bot owner only.**")
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please provide a username or user ID.**")
     await add_sudo(target.id)
-    await message.reply(f"**✅ [{target.first_name}](tg://user?id={target.id}) has been added as a sudo user.**",
-                        disable_web_page_preview=True)
+    await message.reply(
+        f"**✅ [{target.first_name}](tg://user?id={target.id}) has been added as a sudo user.**",
+        disable_web_page_preview=True)
 
 
 @Client.on_message(filters.command("remsudo") & (filters.group | filters.private))
 async def remsudo_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     if not Config.is_owner(message.from_user.id):
         return await message.reply("**❌ This command is for the bot owner only.**")
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please provide a username or user ID.**")
     await remove_sudo(target.id)
-    await message.reply(f"**❌ [{target.first_name}](tg://user?id={target.id}) has been removed from sudo users.**",
-                        disable_web_page_preview=True)
+    await message.reply(
+        f"**❌ [{target.first_name}](tg://user?id={target.id}) has been removed from sudo users.**",
+        disable_web_page_preview=True)
 
 
-@Client.on_message(filters.command("sudolist")) & (filters.group | filters.private))
+@Client.on_message(filters.command("sudolist") & (filters.group | filters.private))
 async def sudolist_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     sudo_ids = await get_sudo_users()
     try:
         owner = await client.get_users(Config.OWNER_ID)
@@ -211,44 +232,50 @@ async def sudolist_cmd(client: Client, message: Message):
 
 # ── BLOCK / UNBLOCK ───────────────────────────────────────────────────────────
 
-@Client.on_message(filters.command("block")) & (filters.group | filters.private))
+@Client.on_message(filters.command("block") & (filters.group | filters.private))
 async def block_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     if not await is_sudo_db(message.from_user.id):
         return await message.reply("**❌ This command is for sudo users only.**")
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please provide a username or user ID.**")
     await block_user(target.id)
-    await message.reply(f"**🔒 [{target.first_name}](tg://user?id={target.id}) has been blocked from using this bot.**",
-                        disable_web_page_preview=True)
+    await message.reply(
+        f"**🔒 [{target.first_name}](tg://user?id={target.id}) has been blocked from using this bot.**",
+        disable_web_page_preview=True)
 
 
-@Client.on_message(filters.command("unblock")) & (filters.group | filters.private))
+@Client.on_message(filters.command("unblock") & (filters.group | filters.private))
 async def unblock_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     if not await is_sudo_db(message.from_user.id):
         return await message.reply("**❌ This command is for sudo users only.**")
     target = await get_target_user(client, message)
     if not target:
         return await message.reply("**❌ Please provide a username or user ID.**")
     await unblock_user(target.id)
-    await message.reply(f"**🔓 [{target.first_name}](tg://user?id={target.id}) has been unblocked.**",
-                        disable_web_page_preview=True)
+    await message.reply(
+        f"**🔓 [{target.first_name}](tg://user?id={target.id}) has been unblocked.**",
+        disable_web_page_preview=True)
 
 
 # ── BROADCAST ─────────────────────────────────────────────────────────────────
 
-@Client.on_message(filters.command("broadcast")) & (filters.group | filters.private))
+@Client.on_message(filters.command("broadcast") & (filters.group | filters.private))
 async def broadcast_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     if not Config.is_owner(message.from_user.id):
         return await message.reply("**❌ This command is for the bot owner only.**")
     if not message.reply_to_message:
         return await message.reply("**❌ Please reply to a message to broadcast.**")
 
     status_msg = await message.reply("**📣 Broadcast beginning...**")
-
     groups = await get_all_groups()
     users = await get_all_users()
-
     success_groups = fail_groups = success_users = fail_users = 0
 
     for grp in groups:
@@ -271,14 +298,15 @@ async def broadcast_cmd(client: Client, message: Message):
     await message.reply(
         f"**📣 Broadcast completed\n\n"
         f"✅ Successful: {success_groups} groups, {success_users} users\n"
-        f"❌ Unsuccessful: {fail_groups} groups, {fail_users} users**"
-    )
+        f"❌ Unsuccessful: {fail_groups} groups, {fail_users} users**")
 
 
 # ── STATS ─────────────────────────────────────────────────────────────────────
 
-@Client.on_message(filters.command("stats")) & (filters.group | filters.private))
+@Client.on_message(filters.command("stats") & (filters.group | filters.private))
 async def stats_cmd(client: Client, message: Message):
+    if not message.from_user:
+        return
     if not await is_sudo_db(message.from_user.id):
         return await message.reply("**❌ This command is for sudo users only.**")
 
@@ -302,7 +330,6 @@ async def stats_cmd(client: Client, message: Message):
         f"**⏱️ Uptime:** `{uptime}`"
     )
     buttons = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Close", callback_data="close")]])
-
     await ping_msg.delete()
     try:
         from plugins.start import START_IMAGE
