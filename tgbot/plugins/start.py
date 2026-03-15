@@ -5,7 +5,7 @@ from database.helpers import save_user, save_group
 from utils.helpers import format_duration
 import datetime
 
-START_IMAGE = "assets/start.jpg"  # Place your start image here
+START_IMAGE = "https://graph.org/file/a276ef2216287bf0081f0-3c6f7d06078a11911a.jpg"  # Place your start image here
 
 def get_uptime():
     if not Config.BOT_START_TIME:
