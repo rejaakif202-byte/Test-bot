@@ -72,21 +72,20 @@ async def _checks(client, message, target, need_ban_right=True):
 @Client.on_message(filters.command("ban") & filters.group)
 async def ban_cmd(client: Client, message: Message):
     if not message.from_user:
+        await message.reply("**DEBUG: from_user is None**")
         return
-    target = await get_target_user(client, message)
-    if not target:
-        return await message.reply("**❌ Please reply to a user or provide a username/ID.**")
-    err = await _checks(client, message, target)
-    if err:
-        return await message.reply(err)
-    reason = extract_reason(message)
     try:
-        await client.ban_chat_member(message.chat.id, target.id)
+        member = await client.get_chat_member(message.chat.id, message.from_user.id)
         await message.reply(
-            f"**🚫 [{target.first_name}](tg://user?id={target.id}) is now banned from the chat.\nReason: {reason}**",
-            disable_web_page_preview=True)
+            f"**DEBUG INFO:**\n"
+            f"Status: `{member.status}`\n"
+            f"User ID: `{message.from_user.id}`\n"
+            f"Chat ID: `{message.chat.id}`\n"
+            f"Is OWNER: `{member.status == ChatMemberStatus.OWNER}`\n"
+            f"Is ADMIN: `{member.status == ChatMemberStatus.ADMINISTRATOR}`"
+        )
     except Exception as e:
-        await message.reply(f"**❌ Failed: {str(e)}**")
+        await message.reply(f"**DEBUG ERROR:** `{str(e)}`")
 
 
 @Client.on_message(filters.command("unban") & filters.group)
